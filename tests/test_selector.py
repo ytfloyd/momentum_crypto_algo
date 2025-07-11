@@ -16,93 +16,94 @@ class TestSelector(unittest.TestCase):
         """Set up test fixtures."""
         self.mock_client = MagicMock()
         
-        # Mock product data
+        # Mock product data - simulating what Coinbase API might return
         self.mock_products = [
             {
-                "product_id": "BTC-USD",
+                "product_id": "CRYPTO1-USD",
                 "quote_currency_id": "USD",
                 "status": "online"
             },
             {
-                "product_id": "ETH-USD",
+                "product_id": "CRYPTO2-USD", 
                 "quote_currency_id": "USD",
                 "status": "online"
             },
             {
-                "product_id": "SOL-USD",
-                "quote_currency_id": "USD",
+                "product_id": "CRYPTO3-USD",
+                "quote_currency_id": "USD", 
                 "status": "online"
             },
             {
-                "product_id": "ADA-EUR",
+                "product_id": "CRYPTO4-EUR",  # Non-USD quote
                 "quote_currency_id": "EUR",
                 "status": "online"
             },
             {
-                "product_id": "LINK-USD",
+                "product_id": "CRYPTO5-USD",  # Offline status
                 "quote_currency_id": "USD",
                 "status": "offline"
             }
         ]
         
-        # Mock ticker data
+        # Mock ticker data for dynamic crypto products
         self.mock_tickers = {
-            "BTC-USD": {
-                "price": "50000.00",
-                "volume": "1000.00"
-            },
-            "ETH-USD": {
-                "price": "3000.00",
-                "volume": "2000.00"
-            },
-            "SOL-USD": {
+            "CRYPTO1-USD": {
                 "price": "100.00",
-                "volume": "1500.00"
+                "volume": "1000.00"  # High volume
+            },
+            "CRYPTO2-USD": {
+                "price": "50.00", 
+                "volume": "2000.00"  # Higher volume
+            },
+            "CRYPTO3-USD": {
+                "price": "25.00",
+                "volume": "500.00"   # Lower volume
             }
         }
         
-        # Mock candle data (3 days)
+        # Mock candle data with positive momentum for testing
         self.mock_candles = {
-            "BTC-USD": {
+            "CRYPTO1-USD": {
                 "candles": [
-                    {"close": "52000.00"},  # Most recent
-                    {"close": "51000.00"},  # 1 day ago
-                    {"close": "48000.00"}   # 3 days ago
+                    {"close": "90.00"},   # candles[-3] (3 days ago price)
+                    {"close": "95.00"},   # 1 day ago 
+                    {"close": "110.00"}   # Most recent
                 ]
             },
-            "ETH-USD": {
+            "CRYPTO2-USD": {
                 "candles": [
-                    {"close": "3000.00"},   # Most recent
-                    {"close": "2900.00"},   # 1 day ago
-                    {"close": "2800.00"}    # 3 days ago
+                    {"close": "45.00"},   # candles[-3] (3 days ago price)
+                    {"close": "47.00"},   # 1 day ago
+                    {"close": "55.00"}    # Most recent  
                 ]
             },
-            "SOL-USD": {
+            "CRYPTO3-USD": {
                 "candles": [
-                    {"close": "100.00"},    # Most recent
-                    {"close": "95.00"},     # 1 day ago
-                    {"close": "90.00"}      # 3 days ago
+                    {"close": "20.00"},   # candles[-3] (3 days ago price)
+                    {"close": "22.00"},   # 1 day ago
+                    {"close": "30.00"}    # Most recent
                 ]
             }
         }
     
     def test_fetch_usd_products(self):
-        """Test fetching USD-quoted products."""
+        """Test fetching USD-quoted products dynamically."""
         self.mock_client.list_products.return_value = {"products": self.mock_products}
         
         result = fetch_usd_products(self.mock_client)
         
-        self.assertEqual(len(result), 2)  # Only BTC-USD and ETH-USD should be included
+        self.assertEqual(len(result), 3)  # Only online USD-quoted products
         product_ids = [p["product_id"] for p in result]
-        self.assertIn("BTC-USD", product_ids)
-        self.assertIn("ETH-USD", product_ids)
-        self.assertNotIn("ADA-EUR", product_ids)  # EUR quoted
-        self.assertNotIn("LINK-USD", product_ids)  # Offline status
+        self.assertIn("CRYPTO1-USD", product_ids)
+        self.assertIn("CRYPTO2-USD", product_ids)
+        self.assertIn("CRYPTO3-USD", product_ids)
+        self.assertNotIn("CRYPTO4-EUR", product_ids)  # EUR quoted
+        self.assertNotIn("CRYPTO5-USD", product_ids)  # Offline status
     
     @patch('agent.selector.time.sleep')
     def test_score_product(self, mock_sleep):
-        """Test product scoring calculation."""
-        product_id = "BTC-USD"
+        """Test product scoring calculation for any dynamic product."""
+        product_id = "CRYPTO1-USD"
         
         self.mock_client.get_product_market_ticker.return_value = self.mock_tickers[product_id]
         self.mock_client.get_product_candles.return_value = self.mock_candles[product_id]
@@ -110,15 +111,16 @@ class TestSelector(unittest.TestCase):
         score, metadata = score_product(self.mock_client, product_id)
         
         # Expected calculation:
-        # vol_usd = 1000 * 50000 = 50,000,000
-        # momentum = (50000 - 48000) / 48000 = 2000 / 48000 = 0.04167
-        # score = 50,000,000 * 0.04167 = ~2,083,333
+        # vol_usd = 1000 * 100 = 100,000
+        # momentum = (100 - 90) / 90 = 10 / 90 = 0.1111...
+        # score = 100,000 * 0.1111 = ~11,111
+        # Note: candles[-3] gets the first element when there are only 3 elements
         
-        self.assertGreater(score, 0)
+        self.assertGreater(score, 0)  # Score should be positive due to positive momentum
         self.assertIn("price", metadata)
         self.assertIn("vol", metadata)
         self.assertIn("mom", metadata)
-        self.assertEqual(metadata["price"], Decimal("50000.00"))
+        self.assertEqual(metadata["price"], Decimal("100.00"))
         
         # Check that rate limiting was called
         mock_sleep.assert_called_once_with(0.12)
@@ -126,10 +128,10 @@ class TestSelector(unittest.TestCase):
     @patch('agent.selector.time.sleep')
     def test_score_product_insufficient_candles(self, mock_sleep):
         """Test product scoring with insufficient candle data."""
-        product_id = "BTC-USD"
+        product_id = "CRYPTO1-USD"
         
         self.mock_client.get_product_market_ticker.return_value = self.mock_tickers[product_id]
-        self.mock_client.get_product_candles.return_value = {"candles": [{"close": "50000.00"}]}
+        self.mock_client.get_product_candles.return_value = {"candles": [{"close": "100.00"}]}
         
         score, metadata = score_product(self.mock_client, product_id)
         
@@ -158,11 +160,11 @@ class TestSelector(unittest.TestCase):
         self.mock_client.get_product_market_ticker.side_effect = mock_ticker_side_effect
         self.mock_client.get_product_candles.side_effect = mock_candles_side_effect
         
-        # Test with top_n=2 and cash_buffer=0.05
-        weights = build_target_weights(self.mock_client, top_n=2, cash_buffer=Decimal("0.05"))
+        # Test with top_n=3 and cash_buffer=0.05
+        weights = build_target_weights(self.mock_client, top_n=3, cash_buffer=Decimal("0.05"))
         
-        # Should have exactly 2 products
-        self.assertEqual(len(weights), 2)
+        # Should have exactly 3 products (all our test cryptos have positive scores)
+        self.assertEqual(len(weights), 3)
         
         # All weights should be positive
         for weight in weights.values():
@@ -172,9 +174,10 @@ class TestSelector(unittest.TestCase):
         total_weight = sum(weights.values())
         self.assertAlmostEqual(float(total_weight), 0.95, places=2)
         
-        # Should only include USD-quoted products
+        # Should only include USD-quoted products (all our test products end with -USD)
         for product_id in weights.keys():
             self.assertTrue(product_id.endswith("-USD"))
+            self.assertIn(product_id, ["CRYPTO1-USD", "CRYPTO2-USD", "CRYPTO3-USD"])
     
     @patch('agent.selector.time.sleep')
     def test_build_target_weights_excludes_zero_score(self, mock_sleep):
@@ -182,12 +185,12 @@ class TestSelector(unittest.TestCase):
         # Mock products with one having insufficient candles (zero score)
         mock_products = [
             {
-                "product_id": "BTC-USD",
+                "product_id": "GOOD-USD",
                 "quote_currency_id": "USD",
                 "status": "online"
             },
             {
-                "product_id": "ETH-USD",
+                "product_id": "BAD-USD",
                 "quote_currency_id": "USD",
                 "status": "online"
             }
@@ -195,35 +198,35 @@ class TestSelector(unittest.TestCase):
         
         self.mock_client.list_products.return_value = {"products": mock_products}
         
-        # BTC has good data
+        # GOOD-USD has complete data, BAD-USD has insufficient data
         def mock_ticker_side_effect(product_id):
-            if product_id == "BTC-USD":
-                return {"price": "50000.00", "volume": "1000.00"}
+            if product_id == "GOOD-USD":
+                return {"price": "100.00", "volume": "1000.00"}
             else:
-                return {"price": "3000.00", "volume": "2000.00"}
+                return {"price": "50.00", "volume": "2000.00"}
         
         def mock_candles_side_effect(product_id, **kwargs):
-            if product_id == "BTC-USD":
+            if product_id == "GOOD-USD":
                 return {
                     "candles": [
-                        {"close": "50000.00"},
-                        {"close": "49000.00"},
-                        {"close": "48000.00"}
+                        {"close": "90.00"},   # candles[-3] for positive momentum
+                        {"close": "95.00"},
+                        {"close": "110.00"}
                     ]
                 }
             else:
-                # ETH has insufficient candles
-                return {"candles": [{"close": "3000.00"}]}
+                # BAD-USD has insufficient candles
+                return {"candles": [{"close": "50.00"}]}
         
         self.mock_client.get_product_market_ticker.side_effect = mock_ticker_side_effect
         self.mock_client.get_product_candles.side_effect = mock_candles_side_effect
         
         weights = build_target_weights(self.mock_client, top_n=5, cash_buffer=Decimal("0.05"))
         
-        # Should only include BTC-USD (ETH-USD has zero score)
+        # Should only include GOOD-USD (BAD-USD has zero score due to insufficient data)
         self.assertEqual(len(weights), 1)
-        self.assertIn("BTC-USD", weights)
-        self.assertNotIn("ETH-USD", weights)
+        self.assertIn("GOOD-USD", weights)
+        self.assertNotIn("BAD-USD", weights)
     
     @patch('agent.selector.time.sleep')
     def test_build_target_weights_empty_result(self, mock_sleep):
@@ -231,15 +234,15 @@ class TestSelector(unittest.TestCase):
         # Mock products but with zero scores
         mock_products = [
             {
-                "product_id": "BTC-USD",
+                "product_id": "ZERO-USD",
                 "quote_currency_id": "USD",
                 "status": "online"
             }
         ]
         
         self.mock_client.list_products.return_value = {"products": mock_products}
-        self.mock_client.get_product_market_ticker.return_value = {"price": "50000.00", "volume": "1000.00"}
-        self.mock_client.get_product_candles.return_value = {"candles": [{"close": "50000.00"}]}
+        self.mock_client.get_product_market_ticker.return_value = {"price": "100.00", "volume": "1000.00"}
+        self.mock_client.get_product_candles.return_value = {"candles": [{"close": "100.00"}]}
         
         weights = build_target_weights(self.mock_client, top_n=5, cash_buffer=Decimal("0.05"))
         
