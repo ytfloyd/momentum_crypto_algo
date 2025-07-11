@@ -1,0 +1,152 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: [3.12]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Cache pip dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Lint with black
+      run: |
+        black --check agent/ tests/
+
+    - name: Sort imports with isort
+      run: |
+        isort --check-only agent/ tests/
+
+    - name: Type checking with mypy
+      run: |
+        mypy agent/ --ignore-missing-imports
+
+    - name: Test with pytest
+      run: |
+        pytest tests/ -v --cov=agent --cov-report=xml
+
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage.xml
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: false
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: 3.12
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install bandit safety
+
+    - name: Run security checks with bandit
+      run: |
+        bandit -r agent/ -f json -o bandit-report.json || true
+
+    - name: Check for known vulnerabilities with safety
+      run: |
+        safety check --json --output safety-report.json || true
+
+    - name: Upload security reports
+      uses: actions/upload-artifact@v3
+      with:
+        name: security-reports
+        path: |
+          bandit-report.json
+          safety-report.json
+
+  build:
+    runs-on: ubuntu-latest
+    needs: [test, security]
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: 3.12
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Validate configuration
+      run: |
+        python -m agent.runner --validate || true
+
+    - name: Create deployment artifact
+      run: |
+        tar -czf coinbase-rebalance-agent.tar.gz \
+          agent/ \
+          requirements.txt \
+          config.yml \
+          README.md \
+          LICENSE \
+          Makefile \
+          .env.example
+
+    - name: Upload deployment artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: deployment-package
+        path: coinbase-rebalance-agent.tar.gz
+
+  notify:
+    runs-on: ubuntu-latest
+    needs: [test, security, build]
+    if: always()
+    
+    steps:
+    - name: Notify on success
+      if: ${{ needs.test.result == 'success' && needs.security.result == 'success' }}
+      run: |
+        echo "🎉 All checks passed successfully!"
+        echo "✅ Tests: ${{ needs.test.result }}"
+        echo "🔒 Security: ${{ needs.security.result }}"
+        echo "🚀 Build: ${{ needs.build.result }}"
+
+    - name: Notify on failure
+      if: ${{ needs.test.result == 'failure' || needs.security.result == 'failure' }}
+      run: |
+        echo "❌ Some checks failed!"
+        echo "🧪 Tests: ${{ needs.test.result }}"
+        echo "🔒 Security: ${{ needs.security.result }}"
+        echo "🚀 Build: ${{ needs.build.result }}"
+        exit 1 

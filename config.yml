@@ -1,0 +1,7 @@
+# Configuration for Coinbase Rebalancing Agent
+# Dynamic selector parameters
+top_n: 25
+cash_buffer: 0.05
+tolerance: 0.007  # 0.7% NAV rebalance band
+liquidity_floor: 20000  # USD volume screen (optional future use)
+rebalance_interval_minutes: 60 
