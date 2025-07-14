@@ -1,0 +1,16 @@
+# Core dependencies for momentum crypto algo
+coinbase-advanced-py>=1.8.2
+PyJWT>=2.10.1
+cryptography>=45.0.5
+requests>=2.32.4
+python-dotenv>=1.1.1
+PyYAML>=6.0.2
+APScheduler>=3.11.0
+rich>=14.0.0
+
+# Development dependencies for testing and linting
+pytest>=8.4.1
+pytest-cov>=4.0.0
+black>=25.1.0
+isort>=6.0.1
+mypy>=1.16.1 
