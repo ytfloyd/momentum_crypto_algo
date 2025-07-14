@@ -22,11 +22,15 @@ def fetch_usd_products(client: RESTClient) -> List[dict]:
     Returns:
         List of product dictionaries for USD-quoted products with online status
     """
-    prods = client.list_products(limit=500)["products"]
-    return [
-        p for p in prods
-        if p["quote_currency_id"] == "USD" and p["status"] == "online"
-    ]
+    try:
+        prods = client.get_products(limit=500)["products"]
+        return [
+            p for p in prods
+            if p["quote_currency_id"] == "USDC" and p["status"] == "online"
+        ]
+    except Exception as e:
+        print(f"Error fetching products: {e}")
+        return []
 
 
 def score_product(client: RESTClient, product_id: str) -> Tuple[Decimal, dict]:
@@ -45,17 +49,29 @@ def score_product(client: RESTClient, product_id: str) -> Tuple[Decimal, dict]:
         and metadata contains price, volume, and momentum values
     """
     # TODO: Replace time.sleep with async batching for better performance
-    time.sleep(0.12)  # Rate limiting guard
+    time.sleep(0.02)  # Rate limiting guard - reduced from 0.12 to 0.02
     
-    tk = client.get_product_market_ticker(product_id)
-    vol_usd = Decimal(tk["volume"]) * Decimal(tk["price"])
-    candles = client.get_product_candles(product_id, granularity="ONE_DAY", limit=3)["candles"]
+    tk = client.get_product(product_id)
+    vol_usd = Decimal(tk.volume_24h) * Decimal(tk.price)
+    
+    # Calculate start and end times for 3 days of data
+    import datetime
+    end_time = datetime.datetime.now(datetime.timezone.utc)
+    start_time = end_time - datetime.timedelta(days=4)  # Get 4 days to ensure we have 3 complete days
+    
+    candles = client.get_candles(
+        product_id, 
+        start=str(int(start_time.timestamp())), 
+        end=str(int(end_time.timestamp())), 
+        granularity="ONE_DAY", 
+        limit=3
+    )["candles"]
     
     if len(candles) < 3:
         return Decimal("0"), {}
     
     close_3d_ago = Decimal(candles[-3]["close"])
-    current_price = Decimal(tk["price"])
+    current_price = Decimal(tk.price)
     mom3d = (current_price - close_3d_ago) / close_3d_ago
     
     score = vol_usd * mom3d
