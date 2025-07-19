@@ -5,7 +5,6 @@ An automated cryptocurrency portfolio rebalancing agent that maintains target as
 using the Coinbase Advanced Trade API.
 """
 
-from .runner import rebalance, main
 from .config import TARGET_WEIGHTS, TOLERANCE, MIN_NOTIONAL, validate_config
 from .utils import (
     get_client,
@@ -22,8 +21,6 @@ __email__ = "your.email@example.com"
 
 # Expose main functions for external use
 __all__ = [
-    "rebalance",
-    "main",
     "TARGET_WEIGHTS",
     "TOLERANCE",
     "MIN_NOTIONAL",

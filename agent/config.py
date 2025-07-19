@@ -5,6 +5,25 @@ Configuration file for the Coinbase rebalancing agent.
 import os
 from decimal import Decimal
 from typing import Dict
+import yaml
+
+# Load environment variables from .env file
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    # dotenv not available, continue without it
+    pass
+
+def load_yaml_config(file_path: str) -> dict:
+    """Load YAML configuration from a file safely."""
+    try:
+        with open(file_path, 'r', encoding='utf-8') as file:
+            return yaml.safe_load(file)
+    except FileNotFoundError:
+        raise FileNotFoundError(f"Configuration file {file_path} not found.")
+    except yaml.YAMLError as e:
+        raise ValueError(f"Error parsing YAML file {file_path}: {e}")
 
 # Target portfolio weights (must sum to 1.0)
 TARGET_WEIGHTS: Dict[str, Decimal] = {
@@ -34,7 +53,7 @@ API_KEY = os.getenv("CB_API_KEY", "")
 API_SECRET = os.getenv("CB_API_SECRET", "")
 API_PASSPHRASE = os.getenv("CB_API_PASSPHRASE", "")
 PORTFOLIO_ID = os.getenv("CB_PORTFOLIO_ID", "")
-API_URL = os.getenv("CB_API_URL", "https://api.coinbase.com")
+API_URL = "https://api.coinbase.com"
 
 # Logging configuration
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
@@ -43,8 +62,8 @@ LOG_FILE = os.getenv("LOG_FILE", "logs/rebalance_agent.log")
 # Validation
 def validate_config():
     """Validate configuration settings."""
-    # Check required environment variables
-    required_vars = [API_KEY, API_SECRET, API_PASSPHRASE, PORTFOLIO_ID]
+    # Check required environment variables for Coinbase Advanced Trade API
+    required_vars = [API_KEY, API_SECRET]
     missing_vars = [var for var in required_vars if not var]
     if missing_vars and not DRY_RUN:
         raise ValueError("Missing required environment variables for live trading")
@@ -54,7 +73,12 @@ def validate_config():
     print(f"  - Tolerance: {TOLERANCE * 100}%")
     print(f"  - Min notional: ${MIN_NOTIONAL}")
     print(f"  - Dry run: {DRY_RUN}")
-    print(f"  - API URL: {API_URL}")
+    print(f"  - Using Coinbase Advanced Trade API")
 
 if __name__ == "__main__":
+    try:
+        config_data = load_yaml_config('config/config.yaml')
+        print("YAML configuration loaded successfully.")
+    except Exception as e:
+        print(f"Error loading YAML configuration: {e}")
     validate_config() 

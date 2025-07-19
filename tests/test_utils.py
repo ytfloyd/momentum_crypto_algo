@@ -180,7 +180,7 @@ class TestCalculateRebalanceTrades:
             "ETH-USD": Decimal("3000"),
         }
         
-        result = calculate_rebalance_trades(current_weights, target_weights, total_value, prices)
+        result = calculate_rebalance_trades(current_weights, target_weights, total_value, prices, cash_buffer=Decimal("0"))
         
         # BTC needs to increase by 10% = $1000, quantity = 1000/50000 = 0.02
         # ETH needs to decrease by 10% = $1000, quantity = 1000/3000 = 0.333...

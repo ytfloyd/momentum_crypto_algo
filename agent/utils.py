@@ -375,9 +375,12 @@ def round_step(value: Decimal, step_size: Decimal) -> Decimal:
     
     return (value // step_size) * step_size
 
-def format_currency(amount: Decimal) -> str:
+def format_currency(amount: Decimal, currency: str = "USD") -> str:
     """Format a decimal amount as currency."""
-    return f"${amount:,.2f}"
+    if currency == "USD":
+        return f"${amount:,.2f}"
+    else:
+        return f"{amount} {currency}"
 
 def calculate_portfolio_value(positions: Dict[str, Decimal], prices: Dict[str, Decimal]) -> Decimal:
     """Calculate total portfolio value in USD."""
@@ -449,6 +452,19 @@ def calculate_rebalance_trades(
     # Calculate investable portion (exclude cash buffer)
     investable_value = total_value * (Decimal("1") - cash_buffer)
     
+    # FIRST: Handle positions that are NOT in target weights (sell them completely)
+    for symbol, current_weight in current_weights.items():
+        if symbol not in target_weights and symbol in prices:
+            # This position should be completely sold
+            trade_value = current_weight * investable_value
+            
+            if trade_value >= config.MIN_NOTIONAL:
+                price = prices[symbol]
+                quantity = trade_value / price
+                trades[symbol] = ("sell", quantity)
+                logging.info(f"📤 Liquidating position not in target: {symbol} ({float(current_weight)*100:.2f}%)")
+    
+    # SECOND: Handle positions that ARE in target weights (rebalance them)
     for symbol, target_weight in target_weights.items():
         if symbol not in prices:
             continue

@@ -1,0 +1,52 @@
+{
+  "agents": [
+    {
+      "name": "core_strategy_agent",
+      "description": "Owns the top-level logic for running the bot in live, paper, or backtest mode.",
+      "files": ["run_strategy.py"],
+      "ignore": ["exec/*", "backtest/*", "debug_trades.py"]
+    },
+    {
+      "name": "signal_agent",
+      "description": "Generates trend-following signals using breakout, MA cross, momentum, and composite models.",
+      "files": ["signals/*.py"],
+      "ignore": ["exec/*", "portfolio/*", "run_strategy.py"]
+    },
+    {
+      "name": "portfolio_agent",
+      "description": "Handles portfolio construction, target weights, and capital allocation logic.",
+      "files": ["portfolio/*.py"],
+      "ignore": ["signals/*", "exec/*", "monitor/*"]
+    },
+    {
+      "name": "execution_agent",
+      "description": "Manages order placement, fills, and Coinbase Advanced SDK integration.",
+      "files": ["exec/*.py"],
+      "ignore": ["signals/*", "portfolio/*", "backtest/*"]
+    },
+    {
+      "name": "risk_agent",
+      "description": "Owns risk control modules: ATR stops, volatility sizing, drawdown limits.",
+      "files": ["risk/*.py"],
+      "ignore": ["exec/*", "monitor/*", "debug_trades.py"]
+    },
+    {
+      "name": "backtest_agent",
+      "description": "Runs historical backtests on local CSV data using Backtrader. Should not interfere with live or paper modes.",
+      "files": ["backtest/*.py"],
+      "ignore": ["exec/*", "run_strategy.py", "debug_trades.py"]
+    },
+    {
+      "name": "debug_agent",
+      "description": "Owns and maintains debug_trades.py to simulate and log trades that would be placed, without placing them.",
+      "files": ["debug_trades.py"],
+      "ignore": ["exec/*", "signals/*", "portfolio/*"]
+    },
+    {
+      "name": "config_guard",
+      "description": "Ensures consistency and safety in config files. Only edits config.yaml and env files with explicit approval.",
+      "files": ["config/*.yaml", ".env"],
+      "ignore": ["signals/*", "exec/*", "run_strategy.py"]
+    }
+  ]
+} 
