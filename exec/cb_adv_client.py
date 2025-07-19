@@ -12,9 +12,52 @@ from typing import Dict, Any, List, Optional
 from decimal import Decimal
 from datetime import datetime, timedelta
 
-from coinbase.rest import RESTClient
-from coinbase.websocket import WSClient
+# Attempt to import the real Coinbase REST client.  If the SDK is not installed,
+# define a stub class so the module can still be imported and tested.
+try:
+    from coinbase.rest import RESTClient  # type: ignore
+except ImportError:
+    class RESTClient:  # type: ignore
+        """Fallback RESTClient used when coinbase-advanced-py is unavailable.
 
+        This stub allows the CoinbaseAdvancedClient to be instantiated in
+        environments where the official SDK is unavailable.  It exposes
+        minimal attributes and methods but will raise NotImplementedError
+        if any API methods are called.  During unit testing, this stub
+        is typically replaced by a mock object before any API call is
+        attempted.
+        """
+
+        def __init__(self, *args, **kwargs) -> None:
+            self._initialized = True
+
+        def __getattr__(self, name: str):
+            raise NotImplementedError(
+                f"Coinbase RESTClient method '{name}' is unavailable because "
+                "the coinbase-advanced-py package is not installed."
+            )
+
+# Attempt to import the real Coinbase WebSocket client.  If unavailable, use a stub.
+try:
+    from coinbase.websocket import WSClient  # type: ignore
+except ImportError:
+    class WSClient:  # type: ignore
+        """Fallback WSClient used when coinbase-advanced-py is unavailable.
+
+        This stub mirrors the behaviour of the RESTClient stub.  It allows
+        CoinbaseAdvancedClient to be constructed without immediately
+        failing, while ensuring that any attempt to use websocket
+        functionality clearly indicates the missing dependency.
+        """
+
+        def __init__(self, *args, **kwargs) -> None:
+            self._initialized = True
+
+        def __getattr__(self, name: str):
+            raise NotImplementedError(
+                f"Coinbase WSClient method '{name}' is unavailable because "
+                "the coinbase-advanced-py package is not installed."
+            )
 
 class CoinbaseAdvancedClient:
     """
@@ -433,5 +476,5 @@ class CoinbaseAdvancedClient:
         try:
             product = self.get_product(product_id)
             return product.get("status") == "online"
-        except:
-            return False 
+        except Exception:
+            return False

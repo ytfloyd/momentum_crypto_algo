@@ -61,22 +61,40 @@ class MomentumSignal(BaseSignal):
     
     def _normalize_momentum(self, momentum: pd.Series, lookback: int = 252) -> pd.Series:
         """
-        Normalize momentum using rolling z-score.
-        
+        Normalize momentum using a rolling z-score.
+
+        This function computes a rolling mean and standard deviation
+        over a specified lookback window to normalize the raw momentum
+        series. If there is insufficient data to compute a full
+        rolling window (e.g., early in the series or when the
+        lookback period exceeds the length of the input), it falls
+        back to using a smaller minimum number of periods and replaces
+        any resulting NaNs with sensible defaults. This approach
+        ensures that momentum normalization always returns numeric
+        values, even for shorter time series.
+
         Args:
             momentum: Raw momentum series
             lookback: Period for rolling statistics (default: 252)
-            
+
         Returns:
             Normalized momentum series
         """
-        rolling_mean = momentum.rolling(window=lookback, min_periods=lookback//2).mean()
-        rolling_std = momentum.rolling(window=lookback, min_periods=lookback//2).std()
-        
-        # Avoid division by zero
+        # Adapt min_periods based on series length to avoid NaNs
+        min_periods = max(1, min(len(momentum), lookback // 2))
+
+        # Compute rolling mean and standard deviation
+        rolling_mean = momentum.rolling(window=lookback, min_periods=min_periods).mean()
+        rolling_std = momentum.rolling(window=lookback, min_periods=min_periods).std()
+
+        # Replace NaN rolling_mean with 0.0 to ensure a baseline
+        rolling_mean = rolling_mean.fillna(0.0)
+
+        # Replace NaN or zero std with 1.0 to avoid division by zero
         rolling_std = rolling_std.fillna(1.0)
         rolling_std = rolling_std.replace(0, 1.0)
-        
+
+        # Return z-score normalized series
         return (momentum - rolling_mean) / rolling_std
     
     def generate_signal(self, data: pd.DataFrame) -> Dict[str, Any]:
@@ -167,4 +185,4 @@ class MomentumSignal(BaseSignal):
             'signal': signal,
             'strength': strength,
             'metadata': metadata
-        } 
+        }
