@@ -12,10 +12,7 @@ from decimal import Decimal, ROUND_DOWN
 from typing import Dict, List, Optional, Tuple, Any
 from datetime import datetime, timezone, timedelta
 
-import requests
 from coinbase.rest import RESTClient
-from cryptography.hazmat.primitives import serialization
-import jwt
 from rich.console import Console
 from rich.logging import RichHandler
 
@@ -32,30 +29,8 @@ def generate_client_order_id() -> str:
     """Generate a unique client order ID using UUID."""
     return uuid.uuid4().hex
 
-# Function to build JWT token
-def build_jwt(api_key, api_secret, uri=None):
-    """Build JWT token for Coinbase API authentication."""
-    private_key_bytes = api_secret.encode("utf-8")
-    private_key = serialization.load_pem_private_key(private_key_bytes, password=None)
-
-    jwt_payload = {
-        'sub': api_key,
-        'iss': "cdp",
-        'nbf': int(time.time()),  # Not before current time
-        'exp': int(time.time()) + 120,  # Expires in 2 minutes
-    }
-
-    if uri:
-        jwt_payload['uri'] = uri
-
-    jwt_token = jwt.encode(
-        jwt_payload,
-        private_key,
-        algorithm="ES256",
-        headers={'kid': api_key, 'nonce': secrets.token_hex()},
-    )
-    
-    return jwt_token
+# Note: The authenticated methods are handled by coinbase-advanced-py RESTClient.
+# No local JWT building is required; removed unused JWT utilities and heavy deps.
 
 # Fetch product details using authenticated client
 def get_product_details(client: RESTClient, product_id: str):
