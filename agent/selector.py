@@ -6,6 +6,7 @@ cryptocurrency products from Coinbase Advanced Trade API based on volume and mom
 """
 
 import time
+import math
 from decimal import Decimal
 from typing import Dict, List, Tuple
 import operator
@@ -24,10 +25,22 @@ def fetch_usd_products(client: RESTClient) -> List[dict]:
     """
     try:
         prods = client.get_products(limit=500)["products"]
-        return [
+        usd_online = [
             p for p in prods
-            if p["quote_currency_id"] == "USDC" and p["status"] == "online"
+            if p.get("quote_currency_id") == "USDC" and p.get("status") == "online"
         ]
+        # Prefer high 24h volume first if available to reduce downstream scoring
+        # Many listings include a 24h volume in quote or base; sort defensively
+        def parse_float(val):
+            try:
+                return float(val)
+            except Exception:
+                return 0.0
+        usd_online.sort(
+            key=lambda p: parse_float(p.get("price", 0)) * parse_float(p.get("volume_24h", 0)),
+            reverse=True,
+        )
+        return usd_online
     except Exception as e:
         print(f"Error fetching products: {e}")
         return []
@@ -49,7 +62,7 @@ def score_product(client: RESTClient, product_id: str) -> Tuple[Decimal, dict]:
         and metadata contains price, volume, and momentum values
     """
     # TODO: Replace time.sleep with async batching for better performance
-    time.sleep(0.02)  # Rate limiting guard - reduced from 0.12 to 0.02
+    time.sleep(0.02)  # Rate limiting guard
     
     tk = client.get_product(product_id)
     vol_usd = Decimal(tk.volume_24h) * Decimal(tk.price)
@@ -104,10 +117,17 @@ def build_target_weights(  # pylint: disable=too-many-locals
     """
     scored = []
     
-    for product in fetch_usd_products(client):
-        score, _ = score_product(client, product["product_id"])
+    products = fetch_usd_products(client)
+    # Preselect a small superset to reduce subsequent API calls
+    shortlist = products[: max(top_n * 2, 50)] if products else []
+
+    for product in shortlist:
+        pid = product.get("product_id")
+        if not pid:
+            continue
+        score, _ = score_product(client, pid)
         if score > 0:
-            scored.append((product["product_id"], score))
+            scored.append((pid, score))
     
     # Sort by score descending and take top N
     scored.sort(key=operator.itemgetter(1), reverse=True)

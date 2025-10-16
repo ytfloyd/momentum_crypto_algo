@@ -7,6 +7,7 @@ with additional functionality for systematic trading strategies.
 
 import os
 import time
+from time import monotonic as _monotonic
 import logging
 from typing import Dict, Any, List, Optional
 from decimal import Decimal
@@ -98,7 +99,7 @@ class CoinbaseAdvancedClient:
         )
         
         # Rate limiting
-        self.last_request_time = 0
+        self._last_request_monotonic = 0.0
         self.min_request_interval = 0.1  # 100ms between requests
         
         # Cache for product information
@@ -111,13 +112,13 @@ class CoinbaseAdvancedClient:
     
     def _rate_limit(self):
         """Apply rate limiting between requests."""
-        current_time = time.time()
-        time_since_last = current_time - self.last_request_time
+        current_time = _monotonic()
+        time_since_last = current_time - self._last_request_monotonic
         
         if time_since_last < self.min_request_interval:
             time.sleep(self.min_request_interval - time_since_last)
         
-        self.last_request_time = time.time()
+        self._last_request_monotonic = _monotonic()
     
     def _handle_api_call(self, func, *args, **kwargs):
         """Handle API calls with rate limiting and error handling."""
